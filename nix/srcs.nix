@@ -7,6 +7,6 @@ rec {
 
   makerpkgsSrc = fetchGit {
     url = "https://github.com/tomosaigon/makerpkgs";
-    rev = "56eadc75fd3518702670105ed4c26d669b162b84";
+    rev = "f7a40da6f2b9ecf34d8be9d7b517bba9f7a5ba1d";
   };
 }
