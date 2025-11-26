@@ -1,6 +1,6 @@
 let srcs = import ./nix/srcs.nix; in
 
-{ pkgs ? import srcs.makerpkgs { inherit dapptoolsOverrides; }
+{ pkgs ? srcs.makerpkgs
 , dapptoolsOverrides ? {}
 , doCheck ? false
 , githubAuthToken ? null
