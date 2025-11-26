@@ -1,7 +1,35 @@
-let srcs = import ./nix/srcs.nix; in
+# default.nix
+let
+  srcs = import ./nix/srcs.nix;
 
-{ pkgs ? srcs.makerpkgs
-, dapptoolsOverrides ? {}
+  # Global semver-range override on the pinned nixpkgs
+  semverOverlay = self: super: {
+    haskellPackages = super.haskellPackages.override (old: {
+      overrides = super.lib.composeExtensions
+        (old.overrides or (_: _: {}))
+        (self-hs: super-hs: {
+          semver-range =
+            (super-hs.semver-range.override {})
+              .overrideAttrs (oldAttrs: {
+                src = super.fetchurl {
+                  url = "https://hackage.haskell.org/package/semver-range-0.2.8/semver-range-0.2.8.tar.gz";
+                  sha256 = "1df663zkcf7y7a8cf5llf111rx4bsflhsi3fr1f840y4kdgxlvkf";
+                };
+              });
+        });
+    });
+  };
+
+  # Import makerpkgs' pinned sources.nix to get the nixpkgs pin
+  makerpkgsSources = import (srcs.makerpkgsSrc + "/nix/sources.nix");
+
+  # Instantiate THAT pinned nixpkgs with our overlay
+  nixpkgsWithSemver = import makerpkgsSources.nixpkgs {
+    overlays = [ semverOverlay ];
+  };
+in
+
+{ pkgs ? import srcs.makerpkgsSrc { pkgs = nixpkgsWithSemver; }
 , doCheck ? false
 , githubAuthToken ? null
 }: with pkgs;
@@ -9,7 +37,6 @@ let srcs = import ./nix/srcs.nix; in
 let
   inherit (builtins) replaceStrings;
   inherit (lib) mapAttrs optionalAttrs id;
-  # Get contract dependencies from lock file
   inherit (callPackage ./dapp2.nix {}) specs packageSpecs package;
   inherit (specs.this) deps;
   optinalFunc = x: fn: if x then fn else id;
@@ -56,20 +83,15 @@ let
     dss-chain-log = deps'.dss-chain-log             // { name = "dss-chain-log-optimized";     solcFlags = "--optimize --optimize-runs 200"; solc = solc-static-versions.solc_0_6_12; };
   });
 
-in makerScriptPackage {
+in
+makerScriptPackage {
   name = "dss-deploy-scripts";
-
-  extraBins = [
-    dappPkgsVersions.hevm-0_43_1.dapp
-  ];
-
-  # Specify files to add to build environment
+  extraBins = [ dappPkgsVersions.hevm-0_43_1.dapp ];
   src = lib.sourceByRegex ./. [
     "bin" "bin/.*"
     "lib" "lib/.*"
     "libexec" "libexec/.*"
     "config" "config/.*"
   ];
-
   solidityPackages = builtins.attrValues packages;
 }
