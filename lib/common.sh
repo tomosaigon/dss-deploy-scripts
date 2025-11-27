@@ -102,7 +102,13 @@ copy() {
 }
 
 # shellcheck disable=SC2001
-dapp0_31_1="$(echo "$PATH" | sed 's/.*\:\(.*\)dapp-0.31.1\(.*\)/\1/')dapp-0.31.1/bin/dapp"
+# dapp0_31_1="$(echo "$PATH" | sed 's/.*\:\(.*\)dapp-0.31.1\(.*\)/\1/')dapp-0.31.1/bin/dapp"
+if command -v dapp >/dev/null 2>&1; then
+    dapp0_31_1="$(command -v dapp)"
+else
+    echo "Error: dapp not found in PATH; please install dapptools (dapp) first." >&2
+    exit 1
+fi
 export dapp0_31_1
 
 dappCreate() {
