@@ -2,23 +2,7 @@
 let
   srcs = import ./nix/srcs.nix;
 
-  # Global semver-range override on the pinned nixpkgs
-  semverOverlay = self: super: {
-    haskellPackages = super.haskellPackages.override (old: {
-      overrides = super.lib.composeExtensions
-        (old.overrides or (_: _: {}))
-        (self-hs: super-hs: {
-          semver-range =
-            (super-hs.semver-range.override {})
-              .overrideAttrs (oldAttrs: {
-                src = super.fetchurl {
-                  url = "https://hackage.haskell.org/package/semver-range-0.2.8/semver-range-0.2.8.tar.gz";
-                  sha256 = "1df663zkcf7y7a8cf5llf111rx4bsflhsi3fr1f840y4kdgxlvkf";
-                };
-              });
-        });
-    });
-  };
+  semverOverlay = import ./nix/semver-overlay.nix;
 
   # Import makerpkgs' pinned sources.nix to get the nixpkgs pin
   makerpkgsSources = import (srcs.makerpkgsSrc + "/nix/sources.nix");
@@ -83,10 +67,19 @@ let
     dss-chain-log = deps'.dss-chain-log             // { name = "dss-chain-log-optimized";     solcFlags = "--optimize --optimize-runs 200"; solc = solc-static-versions.solc_0_6_12; };
   });
 
+
 in
 makerScriptPackage {
   name = "dss-deploy-scripts";
-  extraBins = [ dappPkgsVersions.hevm-0_43_1.dapp ];
+
+  # Rely on hevm from your *own* Dapptools build, available in PATH.
+  # For now, don't ask dss-deploy-scripts to build its own ancient hevm.
+  # You can just omit extraBins entirely:
+  # extraBins = [];
+  #
+  # (Or keep it and point it at pkgs.hevm if that exists in your pkgs.)
+  extraBins = [];
+
   src = lib.sourceByRegex ./. [
     "bin" "bin/.*"
     "lib" "lib/.*"
