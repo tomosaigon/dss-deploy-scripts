@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ $# -lt 2 ]; then
+  echo "Usage: deploy-from-dapp-json <libname> <ContractName>" >&2
+  exit 1
+fi
+
+LIB="$1"
+CLASS="$2"
+JSON="${DAPP_LIB_OVERRIDE:-$DAPP_LIB}/$LIB/out/dapp.sol.json"
+
+if [ ! -f "$JSON" ]; then
+  echo "Error: JSON artifact not found at $JSON" >&2
+  exit 1
+fi
+
+BYTECODE=$(jq -r ".contracts[\"$CLASS\"].bin" "$JSON")
+[ "${BYTECODE#0x}" = "$BYTECODE" ] && BYTECODE="0x$BYTECODE"
+
+echo "Deploying $CLASS from $JSON…"
+RAW=$(seth send --gas "${ETH_GAS:-7000000}" --create "$BYTECODE" 2>&1)
+TX=$(printf '%s\n' "$RAW" | grep 'seth-send:' | grep -o '0x[0-9a-fA-F]\{64\}' | tail -n1)
+
+echo "TX: $TX"
+ADDR=$(seth receipt "$TX" | jq -r '.contractAddress')
+echo "$CLASS deployed at: $ADDR"
