@@ -95,83 +95,179 @@ copyMeta() {
 }
 
 copy() {
-    local lib; lib=$1
-    copyAbis "$lib"
-    copyBins "$lib"
-    copyMeta "$lib"
+    # NOTE: do NOT use `set -e` in here; callers may be running with `-e`.
+    local lib="$1"
+
+    local srcdir=""
+
+    # 1) Original layout: repo-built artifacts
+    if [ -d "$BIN_DIR/contracts/$lib/out" ]; then
+        srcdir="$BIN_DIR/contracts/$lib/out"
+
+    # 2) Nix solidity-packages override
+    elif [ -n "${DAPP_LIB_OVERRIDE:-}" ] && [ -d "$DAPP_LIB_OVERRIDE/$lib/out" ]; then
+        srcdir="$DAPP_LIB_OVERRIDE/$lib/out"
+
+    # 3) Legacy DAPP_LIB tree
+    elif [ -n "${DAPP_LIB:-}" ] && [ -d "$DAPP_LIB/$lib/out" ]; then
+        srcdir="$DAPP_LIB/$lib/out"
+    else
+        echo "WARN(copy): no artifact directory found for lib '$lib'" >&2
+        echo "  looked for:" >&2
+        echo "    $BIN_DIR/contracts/$lib/out" >&2
+        if [ -n "${DAPP_LIB_OVERRIDE:-}" ]; then
+            echo "    $DAPP_LIB_OVERRIDE/$lib/out" >&2
+        fi
+        if [ -n "${DAPP_LIB:-}" ]; then
+            echo "    $DAPP_LIB/$lib/out" >&2
+        fi
+        # Don't fail the whole deploy just because we couldn't copy artifacts
+        return 0
+    fi
+
+    # 4) Copy into OUT_DIR mirror
+    local dest="$OUT_DIR/contracts/$lib"
+    mkdir -p "$dest"
+    cp -R "$srcdir"/. "$dest"/
+
+    echo "DEBUG(copy): copied artifacts for '$lib' from '$srcdir' to '$dest'" >&2
 }
 
 # shellcheck disable=SC2001
 # Use the locally built 0.31.1 dapp, regardless of PATH
-dapp0_31_1="/home/tomo/dev/makerdao/fork/dapptools/result/bin/dapp"
+# dapp0_31_1="/home/tomo/dev/makerdao/fork/dapptools/result/bin/dapp"
 
-if [ ! -x "$dapp0_31_1" ]; then
-    echo "Error: expected dapp at $dapp0_31_1 but it is missing or not executable." >&2
-    echo "Rebuild it in ~/dev/makerdao/fork/dapptools with: nix-build -A dapp" >&2
-    exit 1
-fi
-export dapp0_31_1
+# if [ ! -x "$dapp0_31_1" ]; then
+#     echo "Error: expected dapp at $dapp0_31_1 but it is missing or not executable." >&2
+#     echo "Rebuild it in ~/dev/makerdao/fork/dapptools with: nix-build -A dapp" >&2
+#     exit 1
+# fi
+# export dapp0_31_1
 
 dappCreate() {
-    set -e
+    # IMPORTANT: do NOT use `set -e` in here; callers may be running with `-e`
     local lib="$1"
     local class="$2"
 
-    # Prefer a normalized override tree if provided (e.g. /tmp/dapp-libs-fresh),
-    # falling back to whatever DAPP_LIB the Nix scripts set.
-    local run_lib="${DAPP_LIB_OVERRIDE:-$DAPP_LIB}"
-    local run_dir="$run_lib/$lib"
+    ############################################################
+    # 1) Decide which library tree to use
+    ############################################################
+    local base_lib=""
 
-    # Names to try with dapp create
-    local fq_class="$class"
-    local alt_class="src/$class.sol:$class"
-
-    echo "DEBUG(dappCreate): DAPP_LIB='$run_lib' lib='$lib' class='$class' fq_class='$fq_class' alt_class='$alt_class' DAPP_OUT='$run_dir/out'" >&2
-
-    ETH_NONCE="$(cat "$NONCE_TMP_FILE")"
-
-    # 1) Try plain class name
-    if DAPP_OUT="$run_dir/out" DAPP_SRC="$run_dir/src" ETH_NONCE="$ETH_NONCE" \
-        "$dapp0_31_1" create "$fq_class" "${@:3}"
-    then
-        :
-    # 2) Try src/Foo.sol:Foo style
-    elif DAPP_OUT="$run_dir/out" DAPP_SRC="$run_dir/src" ETH_NONCE="$ETH_NONCE" \
-        "$dapp0_31_1" create "$alt_class" "${@:3}"
-    then
-        :
+    if [ -n "${DAPP_LIB_OVERRIDE:-}" ]; then
+        base_lib="$DAPP_LIB_OVERRIDE/$lib"
+    elif [ -n "${DAPP_LIB:-}" ]; then
+        base_lib="$DAPP_LIB/$lib"
     else
-        # 3) Last resort: read a matching contract key from dapp.sol.json
-        local json="$run_dir/out/dapp.sol.json"
-        if [ -f "$json" ]; then
-            local key
-            key="$(
-                jq -r --arg want "$class" '
-                  .contracts
-                  | keys[]
-                  | select( (.|split(":")|last) == $want )
-                ' "$json" 2>/dev/null || true
-            )"
-
-            if [ -n "$key" ]; then
-                echo "WARN(dappCreate): '$class' not found, retrying with contract key '$key' from $json" >&2
-                if ! DAPP_OUT="$run_dir/out" DAPP_SRC="$run_dir/src" ETH_NONCE="$ETH_NONCE" \
-                     "$dapp0_31_1" create "$key" "${@:3}"
-                then
-                    echo "ERROR(dappCreate): create failed even with contract key '$key'" >&2
-                    return 1
-                fi
-            else
-                echo "ERROR(dappCreate): class '$class' not found and no matching contract key in $json" >&2
-                return 1
-            fi
-        else
-            echo "ERROR(dappCreate): class '$class' not found and $json is missing" >&2
-            return 1
-        fi
+        echo "ERROR(dappCreate): neither DAPP_LIB_OVERRIDE nor DAPP_LIB is set" >&2
+        return 1
     fi
 
-    echo $((ETH_NONCE + 1)) > "$NONCE_TMP_FILE"
+    ############################################################
+    # 2) Locate dapp.sol.json in that tree
+    ############################################################
+    local json=""
+
+    # Common simple case: $base_lib/out/dapp.sol.json
+    if [ -f "$base_lib/out/dapp.sol.json" ]; then
+        json="$base_lib/out/dapp.sol.json"
+    else
+        # More defensive: look for any */out/dapp.sol.json under base_lib
+        json="$(find "$base_lib" -path '*/out/dapp.sol.json' -print -quit 2>/dev/null || true)"
+    fi
+
+    if [ -z "$json" ] || [ ! -f "$json" ]; then
+        echo "ERROR(dappCreate): artifact JSON not found for lib '$lib'" >&2
+        echo "  searched under: $base_lib" >&2
+        echo "  DAPP_LIB_OVERRIDE=${DAPP_LIB_OVERRIDE:-<unset>}" >&2
+        echo "  DAPP_LIB=${DAPP_LIB:-<unset>}" >&2
+        return 1
+    fi
+
+    ############################################################
+    # 3) Find the contract key whose suffix matches $class
+    ############################################################
+    local key
+    key="$(
+        jq -r --arg want "$class" '
+          .contracts
+          | keys[]
+          | select( (.|split(":")|last) == $want )
+        ' "$json" 2>/dev/null || true
+    )"
+
+    if [ -z "$key" ]; then
+        echo "ERROR(dappCreate): no contract key ending with \"$class\" in $json" >&2
+        return 1
+    fi
+
+    ############################################################
+    # 4) Extract bytecode
+    ############################################################
+    local bytecode
+    bytecode="$(jq -r --arg k "$key" '.contracts[$k].bin' "$json")"
+    if [ -z "$bytecode" ] || [ "$bytecode" = "null" ]; then
+        echo "ERROR(dappCreate): empty bytecode for key \"$key\" in $json" >&2
+        return 1
+    fi
+
+    case "$bytecode" in
+        0x*) : ;;
+        *) bytecode="0x$bytecode" ;;
+    esac
+
+    ############################################################
+    # 5) Use NONCE_TMP_FILE for deterministic nonces
+    ############################################################
+    local nonce
+    nonce="$(cat "$NONCE_TMP_FILE")"
+
+    echo "DEBUG(dappCreate): lib='$lib' class='$class' key='$key' json='$json' nonce='$nonce'" >&2
+
+    ############################################################
+    # 6) Send the create tx and capture output
+    ############################################################
+    local raw tx receipt addr
+    raw="$(ETH_NONCE="$nonce" seth send --gas "$ETH_GAS" --create "$bytecode" 2>&1)"
+    printf '%s\n' "$raw" >&2  # keep all chatter on stderr
+
+    # 2) Extract the 32-byte tx hash from the output.
+    #    Works with both:
+    #      - verbose "seth-send: Published transaction ..." style
+    #      - minimal output where the tx hash is printed alone.
+    tx="$(
+      printf '%s\n' "$raw" \
+        | grep -o '0x[0-9a-fA-F]\{64\}' \
+        | tail -n1
+    )"
+
+    if [ -z "$tx" ]; then
+        echo "ERROR(dappCreate): failed to parse tx hash from seth output" >&2
+        return 1
+    fi
+
+    ############################################################
+    # 7) Read receipt and pull contractAddress
+    ############################################################
+    receipt="$(seth receipt "$tx" 2>&1 | grep -v '^seth-rpc:')"
+    addr="$(
+      printf '%s\n' "$receipt" \
+        | awk '$1=="contractAddress"{print $2}'
+    )"
+
+    if [ -z "$addr" ] || [ "$addr" = "null" ]; then
+        echo "ERROR(dappCreate): failed to parse contractAddress from receipt for tx $tx" >&2
+        printf 'Receipt was:\n%s\n' "$receipt" >&2
+        return 1
+    fi
+
+    # Print the address on stdout – other scripts depend on this
+    echo "$addr"
+
+    ############################################################
+    # 8) Increment nonce and copy artifacts
+    ############################################################
+    echo $((nonce + 1)) > "$NONCE_TMP_FILE"
     copy "$lib"
 }
 

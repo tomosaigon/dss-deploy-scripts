@@ -36,6 +36,6 @@ mkShell {
       . ${dds}/lib/setup-env.sh
     }
     export -f setup-env
-    setup-env || echo Re-run setup script with \'setup-env\'
+    echo "Hint: run 'setup-env testchain' inside this shell to initialise geth + ETH_*"
   '';
 }
