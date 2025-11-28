@@ -102,21 +102,75 @@ copy() {
 }
 
 # shellcheck disable=SC2001
-# dapp0_31_1="$(echo "$PATH" | sed 's/.*\:\(.*\)dapp-0.31.1\(.*\)/\1/')dapp-0.31.1/bin/dapp"
-if command -v dapp >/dev/null 2>&1; then
-    dapp0_31_1="$(command -v dapp)"
-else
-    echo "Error: dapp not found in PATH; please install dapptools (dapp) first." >&2
+# Use the locally built 0.31.1 dapp, regardless of PATH
+dapp0_31_1="/home/tomo/dev/makerdao/fork/dapptools/result/bin/dapp"
+
+if [ ! -x "$dapp0_31_1" ]; then
+    echo "Error: expected dapp at $dapp0_31_1 but it is missing or not executable." >&2
+    echo "Rebuild it in ~/dev/makerdao/fork/dapptools with: nix-build -A dapp" >&2
     exit 1
 fi
 export dapp0_31_1
 
 dappCreate() {
     set -e
-    local lib; lib=$1
-    local class; class=$2
-    ETH_NONCE=$(cat "$NONCE_TMP_FILE")
-    DAPP_OUT="$DAPP_LIB/$lib/out" ETH_NONCE="$ETH_NONCE" "$dapp0_31_1" create "$class" "${@:3}"
+    local lib="$1"
+    local class="$2"
+
+    # Prefer a normalized override tree if provided (e.g. /tmp/dapp-libs-fresh),
+    # falling back to whatever DAPP_LIB the Nix scripts set.
+    local run_lib="${DAPP_LIB_OVERRIDE:-$DAPP_LIB}"
+    local run_dir="$run_lib/$lib"
+
+    # Names to try with dapp create
+    local fq_class="$class"
+    local alt_class="src/$class.sol:$class"
+
+    echo "DEBUG(dappCreate): DAPP_LIB='$run_lib' lib='$lib' class='$class' fq_class='$fq_class' alt_class='$alt_class' DAPP_OUT='$run_dir/out'" >&2
+
+    ETH_NONCE="$(cat "$NONCE_TMP_FILE")"
+
+    # 1) Try plain class name
+    if DAPP_OUT="$run_dir/out" DAPP_SRC="$run_dir/src" ETH_NONCE="$ETH_NONCE" \
+        "$dapp0_31_1" create "$fq_class" "${@:3}"
+    then
+        :
+    # 2) Try src/Foo.sol:Foo style
+    elif DAPP_OUT="$run_dir/out" DAPP_SRC="$run_dir/src" ETH_NONCE="$ETH_NONCE" \
+        "$dapp0_31_1" create "$alt_class" "${@:3}"
+    then
+        :
+    else
+        # 3) Last resort: read a matching contract key from dapp.sol.json
+        local json="$run_dir/out/dapp.sol.json"
+        if [ -f "$json" ]; then
+            local key
+            key="$(
+                jq -r --arg want "$class" '
+                  .contracts
+                  | keys[]
+                  | select( (.|split(":")|last) == $want )
+                ' "$json" 2>/dev/null || true
+            )"
+
+            if [ -n "$key" ]; then
+                echo "WARN(dappCreate): '$class' not found, retrying with contract key '$key' from $json" >&2
+                if ! DAPP_OUT="$run_dir/out" DAPP_SRC="$run_dir/src" ETH_NONCE="$ETH_NONCE" \
+                     "$dapp0_31_1" create "$key" "${@:3}"
+                then
+                    echo "ERROR(dappCreate): create failed even with contract key '$key'" >&2
+                    return 1
+                fi
+            else
+                echo "ERROR(dappCreate): class '$class' not found and no matching contract key in $json" >&2
+                return 1
+            fi
+        else
+            echo "ERROR(dappCreate): class '$class' not found and $json is missing" >&2
+            return 1
+        fi
+    fi
+
     echo $((ETH_NONCE + 1)) > "$NONCE_TMP_FILE"
     copy "$lib"
 }

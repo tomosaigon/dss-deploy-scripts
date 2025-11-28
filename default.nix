@@ -72,6 +72,8 @@ in
 makerScriptPackage {
   name = "dss-deploy-scripts";
 
+  # extraBins = []; # dapp-create: error: ChainLog not found
+  # extraBins = [ dappPkgsVersions.hevm-0_43_1.dapp ];
   # Rely on hevm from your *own* Dapptools build, available in PATH.
   # For now, don't ask dss-deploy-scripts to build its own ancient hevm.
   # You can just omit extraBins entirely:
