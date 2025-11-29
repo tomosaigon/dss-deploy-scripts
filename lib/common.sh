@@ -162,17 +162,16 @@ dappCreate() {
         echo "ERROR(dappCreate): neither DAPP_LIB_OVERRIDE nor DAPP_LIB is set" >&2
         return 1
     fi
+    echo "DEBUG(dappCreate): lib='$lib' class='$class' ctor_args='${*:3}'" >&2
 
     ############################################################
     # 2) Locate dapp.sol.json in that tree
     ############################################################
     local json=""
 
-    # Common simple case: $base_lib/out/dapp.sol.json
     if [ -f "$base_lib/out/dapp.sol.json" ]; then
         json="$base_lib/out/dapp.sol.json"
     else
-        # More defensive: look for any */out/dapp.sol.json under base_lib
         json="$(find "$base_lib" -path '*/out/dapp.sol.json' -print -quit 2>/dev/null || true)"
     fi
 
@@ -227,14 +226,11 @@ dappCreate() {
     ############################################################
     # 6) Send the create tx and capture output
     ############################################################
-    local raw tx receipt addr
+    local raw tx
     raw="$(ETH_NONCE="$nonce" seth send --gas "$ETH_GAS" --create "$bytecode" 2>&1)"
     printf '%s\n' "$raw" >&2  # keep all chatter on stderr
 
-    # 2) Extract the 32-byte tx hash from the output.
-    #    Works with both:
-    #      - verbose "seth-send: Published transaction ..." style
-    #      - minimal output where the tx hash is printed alone.
+    # Extract tx hash from output
     tx="$(
       printf '%s\n' "$raw" \
         | grep -o '0x[0-9a-fA-F]\{64\}' \
@@ -246,22 +242,42 @@ dappCreate() {
         return 1
     fi
 
-    ############################################################
-    # 7) Read receipt and pull contractAddress
-    ############################################################
-    receipt="$(seth receipt "$tx" 2>&1 | grep -v '^seth-rpc:')"
-    addr="$(
-      printf '%s\n' "$receipt" \
-        | awk '$1=="contractAddress"{print $2}'
-    )"
+    # Async mode: keep old behaviour – return tx hash
+    if [ "${SETH_ASYNC:-}" = "yes" ]; then
+        echo $((nonce + 1)) > "$NONCE_TMP_FILE"
+        copy "$lib"
+        echo "$tx"
+        return 0
+    fi
 
-    if [ -z "$addr" ] || [ "$addr" = "null" ]; then
-        echo "ERROR(dappCreate): failed to parse contractAddress from receipt for tx $tx" >&2
+    ############################################################
+    # 7) Read receipt and pull status + contractAddress
+    ############################################################
+    local receipt status addr
+    receipt="$(seth receipt "$tx" 2>&1 | grep -v '^seth-rpc:')"
+    status="$(printf '%s\n' "$receipt" | awk '$1=="status"{print $2}')"
+    addr="$(printf '%s\n' "$receipt"   | awk '$1=="contractAddress"{print $2}')"
+
+    if [ -z "$status" ]; then
+        echo "ERROR(dappCreate): could not parse status from receipt for tx $tx" >&2
         printf 'Receipt was:\n%s\n' "$receipt" >&2
         return 1
     fi
 
-    # Print the address on stdout – other scripts depend on this
+    # Accept both decimal and hex '1'
+    if [ "$status" != "1" ] && [ "$status" != "0x1" ]; then
+        echo "ERROR(dappCreate): deployment of $lib/$class failed (status=$status, tx=$tx)" >&2
+        printf 'Receipt was:\n%s\n' "$receipt" >&2
+        return 1
+    fi
+
+    if [ -z "$addr" ] || [ "$addr" = "null" ]; then
+        echo "ERROR(dappCreate): missing contractAddress in receipt for successful tx $tx" >&2
+        printf 'Receipt was:\n%s\n' "$receipt" >&2
+        return 1
+    fi
+
+    # Print the address on stdout – this is the critical change
     echo "$addr"
 
     ############################################################
