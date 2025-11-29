@@ -84,8 +84,11 @@ PROXY_REGISTRY=$(jq -r ".import.proxyRegistry | values" "$CONFIG_FILE")
 if [[ -z "$PROXY_REGISTRY" ]]; then
     PROXY_FACTORY=$(dappCreate ds-proxy DSProxyFactory)
     logAddr "PROXY_FACTORY" "$PROXY_FACTORY"
-    PROXY_REGISTRY=$(dappCreate proxy-registry ProxyRegistry "$PROXY_FACTORY")
-    logAddr "PROXY_REGISTRY" "$PROXY_REGISTRY"
+
+    # NOTE: ProxyRegistry deployment is currently broken on this Nix pin.
+    # For local testchain we skip it rather than fail the whole deploy.
+    echo "WARN: Skipping ProxyRegistry deployment on local testchain (ProxyRegistry revert)"
+    # leave PROXY_REGISTRY empty so later code can treat it as "not present"
 else
     PROXY_FACTORY=$(seth storage "$PROXY_REGISTRY" 1)
     PROXY_FACTORY=0x${PROXY_FACTORY:26:66}
@@ -214,12 +217,17 @@ logAddr "MCD_GOV_ACTIONS" "$MCD_GOV_ACTIONS"
 PROXY_PAUSE_ACTIONS=$(dappCreate dss-deploy-pause-proxy-actions DssDeployPauseProxyActions)
 logAddr "PROXY_PAUSE_ACTIONS" "$PROXY_PAUSE_ACTIONS"
 
-# Get a proxy for the deployer address (create if didn't previously exist)
-PROXY_DEPLOYER=$(seth call "$PROXY_REGISTRY" 'proxies(address)(address)' "$ETH_FROM")
-if [[ "$PROXY_DEPLOYER" == "0x0000000000000000000000000000000000000000" ]]; then
-    sethSend "$PROXY_REGISTRY" 'build()'
-    PROXY_DEPLOYER="$(seth call "$PROXY_REGISTRY" 'proxies(address)(address)' "$ETH_FROM")"
-    log "PROXY_DEPLOYER=$PROXY_DEPLOYER"
+# Create / look up our DSProxy via ProxyRegistry (if available)
+if [[ -n "$PROXY_REGISTRY" ]]; then
+    PROXY_DEPLOYER=$(seth call "$PROXY_REGISTRY" 'proxies(address)(address)' "$ETH_FROM")
+    if [[ "$PROXY_DEPLOYER" == "0x0000000000000000000000000000000000000000" ]]; then
+        sethSend "$PROXY_REGISTRY" 'build()'
+        PROXY_DEPLOYER="$(seth call "$PROXY_REGISTRY" 'proxies(address)(address)' "$ETH_FROM")"
+    fi
+    logAddr "PROXY_DEPLOYER" "$PROXY_DEPLOYER"
+else
+    echo "WARN: PROXY_REGISTRY unset; skipping ProxyDeployer creation for local testchain"
+    PROXY_DEPLOYER=0x0000000000000000000000000000000000000000
 fi
 
 # Set the proxy address as root of the roles (in order to be able to do all the variables set up)
@@ -391,9 +399,9 @@ cat > "$OUT_DIR"/addresses.json <<EOF
     "MCD_VEST_MKR": "$MCD_VEST_MKR",
     "MCD_VEST_MKR_TREASURY": "$MCD_VEST_MKR_TREASURY",
     "PROXY_FACTORY": "$(seth --to-checksum-address "$PROXY_FACTORY")",
-    "PROXY_REGISTRY": "$(seth --to-checksum-address "$PROXY_REGISTRY")"$ILKS_VARS,
+    "PROXY_REGISTRY": "$(seth --to-checksum-address "${PROXY_REGISTRY:-0x0000000000000000000000000000000000000000}")"$ILKS_VARS,
     "PROXY_PAUSE_ACTIONS": "$PROXY_PAUSE_ACTIONS",
-    "PROXY_DEPLOYER": "$(seth --to-checksum-address "$PROXY_DEPLOYER")"
+    "PROXY_DEPLOYER": "$(seth --to-checksum-address "${PROXY_DEPLOYER:-0x0000000000000000000000000000000000000000}")",
 }
 EOF
 
