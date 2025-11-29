@@ -18,66 +18,30 @@
 # shellcheck source=lib/common.sh
 . "$LIB_DIR/common.sh"
 
-export SETH_ASYNC=yes
+# export SETH_ASYNC=yes
 
-VAT_FABtx=$(dappCreate dss-deploy-1_2 VatFab)
-JUG_FABtx=$(dappCreate dss-deploy-1_2 JugFab)
-VOW_FABtx=$(dappCreate dss-deploy-1_2 VowFab)
-CAT_FABtx=$(dappCreate dss-deploy-1_2 CatFab)
-DOG_FABtx=$(dappCreate dss-deploy DogFab)
-DAI_FABtx=$(dappCreate dss-deploy-1_2 DaiFab)
-MCD_JOIN_DAI_FABtx=$(dappCreate dss-deploy-1_2 DaiJoinFab)
-FLAP_FABtx=$(dappCreate dss-deploy-1_2 FlapFab)
-FLOP_FABtx=$(dappCreate dss-deploy-1_2 FlopFab)
-FLIP_FABtx=$(dappCreate dss-deploy-1_2 FlipFab)
-CLIP_FABtx=$(dappCreate dss-deploy ClipFab)
-CALC_FABtx=$(dappCreate dss-deploy CalcFab)
-SPOT_FABtx=$(dappCreate dss-deploy-1_2 SpotFab)
-POT_FABtx=$(dappCreate dss-deploy-1_2 PotFab)
-CURE_FABtx=$(dappCreate dss-deploy CureFab)
-END_FABtx=$(dappCreate dss-deploy EndFab)
-ESM_FABtx=$(dappCreate dss-deploy ESMFab)
-PAUSE_FABtx=$(dappCreate dss-deploy-1_2 PauseFab)
+# dappCreate now returns the contract *address* directly, not a tx hash.
+# If any deployment fails, abort this script.
+VAT_FAB="$(dappCreate dss-deploy-1_2 VatFab)" || exit 1
+JUG_FAB="$(dappCreate dss-deploy-1_2 JugFab)" || exit 1
+VOW_FAB="$(dappCreate dss-deploy-1_2 VowFab)" || exit 1
+CAT_FAB="$(dappCreate dss-deploy-1_2 CatFab)" || exit 1
+DOG_FAB="$(dappCreate dss-deploy     DogFab)" || exit 1
+DAI_FAB="$(dappCreate dss-deploy-1_2 DaiFab)" || exit 1
+MCD_JOIN_DAI_FAB="$(dappCreate dss-deploy-1_2 DaiJoinFab)" || exit 1
+FLAP_FAB="$(dappCreate dss-deploy-1_2 FlapFab)" || exit 1
+FLOP_FAB="$(dappCreate dss-deploy-1_2 FlopFab)" || exit 1
+FLIP_FAB="$(dappCreate dss-deploy-1_2 FlipFab)" || exit 1
+CLIP_FAB="$(dappCreate dss-deploy     ClipFab)" || exit 1
+CALC_FAB="$(dappCreate dss-deploy     CalcFab)" || exit 1
+SPOT_FAB="$(dappCreate dss-deploy-1_2 SpotFab)" || exit 1
+POT_FAB="$(dappCreate dss-deploy-1_2 PotFab)" || exit 1
+CURE_FAB="$(dappCreate dss-deploy     CureFab)" || exit 1
+END_FAB="$(dappCreate dss-deploy      EndFab)" || exit 1
+ESM_FAB="$(dappCreate dss-deploy      ESMFab)" || exit 1
+PAUSE_FAB="$(dappCreate dss-deploy-1_2 PauseFab)" || exit 1
 
-export SETH_ASYNC=no
-
-test "$(seth receipt "$VAT_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$JUG_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$VOW_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$CAT_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$DOG_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$DAI_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$MCD_JOIN_DAI_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$FLAP_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$FLOP_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$FLIP_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$CLIP_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$CALC_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$SPOT_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$POT_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$CURE_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$END_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$ESM_FABtx" status)" -eq 0 && exit 1
-test "$(seth receipt "$PAUSE_FABtx" status)" -eq 0 && exit 1
-
-VAT_FAB=$(seth receipt "$VAT_FABtx" contractAddress)
-JUG_FAB=$(seth receipt "$JUG_FABtx" contractAddress)
-VOW_FAB=$(seth receipt "$VOW_FABtx" contractAddress)
-CAT_FAB=$(seth receipt "$CAT_FABtx" contractAddress)
-DOG_FAB=$(seth receipt "$DOG_FABtx" contractAddress)
-DAI_FAB=$(seth receipt "$DAI_FABtx" contractAddress)
-MCD_JOIN_DAI_FAB=$(seth receipt "$MCD_JOIN_DAI_FABtx" contractAddress)
-FLAP_FAB=$(seth receipt "$FLAP_FABtx" contractAddress)
-FLOP_FAB=$(seth receipt "$FLOP_FABtx" contractAddress)
-FLIP_FAB=$(seth receipt "$FLIP_FABtx" contractAddress)
-CLIP_FAB=$(seth receipt "$CLIP_FABtx" contractAddress)
-CALC_FAB=$(seth receipt "$CALC_FABtx" contractAddress)
-SPOT_FAB=$(seth receipt "$SPOT_FABtx" contractAddress)
-POT_FAB=$(seth receipt "$POT_FABtx" contractAddress)
-CURE_FAB=$(seth receipt "$CURE_FABtx" contractAddress)
-END_FAB=$(seth receipt "$END_FABtx" contractAddress)
-ESM_FAB=$(seth receipt "$ESM_FABtx" contractAddress)
-PAUSE_FAB=$(seth receipt "$PAUSE_FABtx" contractAddress)
+# export SETH_ASYNC=no
 
 logAddr "VAT_FAB" "$VAT_FAB"
 logAddr "JUG_FAB" "$JUG_FAB"
