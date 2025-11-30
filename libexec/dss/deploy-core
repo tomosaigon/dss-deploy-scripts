@@ -21,7 +21,12 @@
 # If no Governance token is defined, create one
 if [ -z "$MCD_GOV" ]
 then
-    MCD_GOV=$(dappCreate ds-token DSToken '"MKR"')
+    # TEMP HACK: skip deploying DSToken("MKR") because it currently reverts.
+    # Use a dummy address so the rest of the deploy can proceed.
+    MCD_GOV=0x0000000000000000000000000000000000000001
+    log "TEMP: Skipping ds-token/DSToken \"MKR\" deployment; using dummy MCD_GOV=$MCD_GOV"
+    # Original:
+    # MCD_GOV=$(dappCreate ds-token DSToken '"MKR"')
     logAddr "MCD_GOV" "$MCD_GOV"
 fi
 
