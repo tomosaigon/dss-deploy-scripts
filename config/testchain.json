@@ -27,9 +27,6 @@
   "flash_max": "500000000",
   "tokens": {
     "USDC": {
-      "import": {
-        "gem": "0x4bAC750C58F74365dd76D4a9Ca53606cB73D9ab0"
-      },
       "gemDeploy": {
         "src": "dss-gem-joins/USDC",
         "params": ["1000000000000000000000000"],
