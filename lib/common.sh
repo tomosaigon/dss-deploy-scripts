@@ -226,8 +226,14 @@ dappCreate() {
     ############################################################
     # 6) Send the create tx and capture output
     ############################################################
-    local raw tx
-    raw="$(ETH_NONCE="$nonce" seth send --gas "$ETH_GAS" --create "$bytecode" 2>&1)"
+    # local raw tx
+    # raw="$(ETH_NONCE="$nonce" seth send --gas "$ETH_GAS" --create "$bytecode" 2>&1)"
+    local raw tx gas
+    # Use a generous default gas for contract creation if ETH_GAS is unset.
+    # DSToken and other large contracts need much more than a few hundred k.
+    gas="${ETH_GAS:-5000000}"
+
+    raw="$(ETH_NONCE="$nonce" seth send --gas "$gas" --create "$bytecode" 2>&1)"
     printf '%s\n' "$raw" >&2  # keep all chatter on stderr
 
     # Extract tx hash from output
