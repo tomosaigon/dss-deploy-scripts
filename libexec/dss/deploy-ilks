@@ -18,10 +18,23 @@
 # shellcheck source=lib/common.sh
 . "$LIB_DIR/common.sh"
 
+# TEMP: Restrict which tokens we actually deploy ilks for.
+# If empty, all tokens from $CONFIG_FILE are used.
+ENABLED_TOKENS="${ENABLED_TOKENS:-USDC WBTC}"
 
 tokens=$(jq -r ".tokens | keys_unsorted[]" "$CONFIG_FILE")
 
 for token in $tokens; do
+    if [ -n "$ENABLED_TOKENS" ]; then
+        case " $ENABLED_TOKENS " in
+            *" $token "*) ;;  # allowed, continue
+            *)
+                log "TEMP: Skipping token ${token} in deploy-ilks (not in ENABLED_TOKENS='$ENABLED_TOKENS')"
+                continue
+                ;;
+        esac
+    fi
+
     gemAddr=$(jq -r ".tokens.${token} | .import.gem | values" "$CONFIG_FILE")
     
     if [[ "$gemAddr" == "" ]]; then
