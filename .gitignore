@@ -1,1 +1,4 @@
-/out
+/out# Local scratch for USDC / GemJoin experiments
+/local-usdc/
+/local-joins/
+hevm.log
