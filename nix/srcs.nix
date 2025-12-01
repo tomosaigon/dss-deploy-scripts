@@ -2,7 +2,7 @@ rec {
   # Default import pinned pkgs
   makerpkgs = fetchGit {
     url = "https://github.com/tomosaigon/makerpkgs";
-    rev = "d6fd1a1410c1dfd41657c68815c3642b33642787";
+    rev = "6afbf1bf4cea038ff79730330f1e1d9d5aad7ef7";
     ref = "compat/1.13.0-semver";
   };
 }
