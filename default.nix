@@ -1,6 +1,6 @@
 let srcs = import ./nix/srcs.nix; in
 
-{ pkgs ? import srcs.makerpkgs { inherit dapptoolsOverrides; }
+{ pkgs
 , dapptoolsOverrides ? {}
 , doCheck ? false
 , githubAuthToken ? null
@@ -60,7 +60,7 @@ in makerScriptPackage {
   name = "dss-deploy-scripts";
 
   extraBins = [
-    dappPkgsVersions.hevm-0_43_1.dapp
+    # dappPkgsVersions.hevm-0_43_1.dapp
   ];
 
   # Specify files to add to build environment
