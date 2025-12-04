@@ -20,6 +20,8 @@ set -eo pipefail
 
 DAPP_LIB=${DAPP_LIB:-$BIN_DIR/contracts}
 
+# Make sure NONCE_TMP_FILE is defined (even if empty) so export doesn't trip set -u
+NONCE_TMP_FILE=${NONCE_TMP_FILE:-}
 export NONCE_TMP_FILE
 clean() {
     test -f "$NONCE_TMP_FILE" && rm "$NONCE_TMP_FILE"
