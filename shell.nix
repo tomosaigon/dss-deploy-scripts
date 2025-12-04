@@ -1,7 +1,6 @@
 # shell.nix
 let
   # Args passed by the caller (e.g. `nix-shell shell.nix --arg ...`).
-  # By default we just use an empty set.
   args = { };
 
   srcs = import ./nix/srcs.nix;
@@ -14,7 +13,7 @@ let
   # Local DappTools override: force semver-range 0.2.8 from Hackage
   localDapptoolsOverrides = {
     semver-range = hself: hsuper: {
-      semver-range = hsuper.callHackage "semver-range" "0.2.8" {};
+      semver-range = hsuper.callHackage "semver-range" "0.2.8" { };
     };
   };
 
@@ -43,10 +42,26 @@ pkgs.mkShell {
     export NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
     unset SSL_CERT_FILE
 
+    # Put $HOME/bin first so our pinned solc 0.6.12 wins over the Nix one.
+    export PATH="$HOME/bin:$PATH"
+
+    # Optional: explicitly tell dapp which solc to use.
+    if command -v solc >/dev/null 2>&1; then
+      export DAPP_SOLC="$(command -v solc)"
+    fi
+
+    # Define setup-env() helper in this shell
     setup-env() {
       . ${dds}/lib/setup-env.sh
     }
     export -f setup-env
-    setup-env || echo Re-run setup script with \'setup-env\'
+
+    setup-env || echo "Re-run setup script with 'setup-env'"
+
+    echo "dapp in this shell:"
+    dapp --version | head -n1 || true
+
+    echo "solc in this shell:"
+    solc --version || true
   '';
 }
