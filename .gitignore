@@ -1,1 +1,8 @@
 /out
+# Local dev artifacts
+bin/contracts/
+hevm.log
+trace.log
+local-joins/
+local-usdc/
+result
