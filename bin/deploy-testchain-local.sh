@@ -2,6 +2,15 @@
 # Run from repo root
 set -euo pipefail
 
+: "${TESTNET_HOST:=localhost}"
+: "${TESTNET_PORT:=8545}"
+
+# Default keystore location for the local testchain
+: "${KEYSTORE_PATH:="$HOME/.dapp/testnet/$TESTNET_PORT/keystore"}"
+export TESTNET_HOST TESTNET_PORT KEYSTORE_PATH
+mkdir -p "$KEYSTORE_PATH"
+
+
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 ########################################
@@ -47,10 +56,14 @@ echo "Using DAPP_LIB=$DAPP_LIB"
 ########################################
 CHAINLOG_JSON="$LOCAL_DAPP_LIB/dss-chain-log/dapp.sol.json"
 if [[ -f "$CHAINLOG_JSON" ]]; then
-  CHAINLOG_KEY="$(
-    jq -r '.contracts | keys[] | select(endswith(":ChainLog"))' \
-      "$CHAINLOG_JSON" | head -n1 || true
-  )"
+  # CHAINLOG_KEY="$(
+  #   jq -r '.contracts | keys[] | select(endswith(":ChainLog"))' \
+  #     "$CHAINLOG_JSON" | head -n1 || true
+  # )"
+  CHAINLOG_KEY=$(
+    jq -r '.contracts | keys[] | select(test("ChainLog"))' \
+      "$BIN_DIR/contracts/dss-chain-log/dapp.sol.json"
+  )
   if [[ -n "$CHAINLOG_KEY" && "$CHAINLOG_KEY" != "null" ]]; then
     echo "Local ChainLog artifact key: $CHAINLOG_KEY"
   else
